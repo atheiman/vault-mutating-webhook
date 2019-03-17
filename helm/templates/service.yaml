@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "vault-mutating-webhook.fullname" . }}
+  name: {{ include "vault-mutating-webhook.name" . }}
   labels:
     app.kubernetes.io/name: {{ include "vault-mutating-webhook.name" . }}
     helm.sh/chart: {{ include "vault-mutating-webhook.chart" . }}
@@ -11,9 +11,9 @@ spec:
   type: {{ .Values.service.type }}
   ports:
     - port: {{ .Values.service.port }}
-      targetPort: http
+      targetPort: https
       protocol: TCP
-      name: http
+      name: https
   selector:
     app.kubernetes.io/name: {{ include "vault-mutating-webhook.name" . }}
     app.kubernetes.io/instance: {{ .Release.Name }}

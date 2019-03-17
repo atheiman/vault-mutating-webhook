@@ -31,8 +31,35 @@ In the future, there should be integration tests with Kubernetes using something
 
 ## Notes
 
-```
+```shell
+# Docker build, run, and push
 docker build -t atheiman/vault-mutating-webhook .
 docker run --rm -p 3000:3000 atheiman/vault-mutating-webhook
 docker push atheiman/vault-mutating-webhook
+
+# Create and use namespace for mutating admission webhook
+kubectl create ns vault-mutating-webhook
+kubectl config set-context $(kubectl config current-context) --namespace=vault-mutating-webhook
+# Create cert and key secret
+title=vault-mutating-webhook ./gen-cert.sh
+# Deploy the helm chart with the cluster caBundle
+ca_bundle="$(kubectl get configmap -n kube-system extension-apiserver-authentication \
+  -o=jsonpath='{.data.client-ca-file}' | base64 | tr -d '\n')"
+
+helm init
+helm install ./helm/ --name vault-mutating-webhook \
+  --set webhook.fqdn=vault-mutating-webhook.example.com \
+  --set "ssl.caBundle=$ca_bundle"
+helm upgrade vault-mutating-webhook ./helm/ --install \
+  --set webhook.fqdn=vault-mutating-webhook.example.com \
+  --set "ssl.caBundle=$ca_bundle"
+
+# Run Vault in the default namespace
+kubectl apply -n default -f test/vault.yaml
+
+kubectl apply -f test/test-pod.yaml
+kubectl get po -n webhook-test --show-labels
+
+rspec failure? dump response to an html file:
+File.open('./resp_body.html', 'w') { |file| file.write(last_response.body) }
 ```

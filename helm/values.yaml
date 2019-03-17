@@ -5,29 +5,30 @@
 replicaCount: 1
 
 image:
-  repository: nginx
-  tag: stable
-  pullPolicy: IfNotPresent
+  repository: atheiman/vault-mutating-webhook
+  tag: latest
+  pullPolicy: Always
 
 nameOverride: ""
 fullnameOverride: ""
 
+webhook:
+  # 'Ignore' or 'Fail'
+  failurePolicy: Fail
+  fqdn:
+
 service:
   type: ClusterIP
-  port: 80
+  port: 443
 
-ingress:
-  enabled: false
-  annotations: {}
-    # kubernetes.io/ingress.class: nginx
-    # kubernetes.io/tls-acme: "true"
-  paths: []
-  hosts:
-    - chart-example.local
-  tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
+ssl:
+  # Can be created with `title=vault-mutating-webhook ./gen-cert.sh`. The secret
+  # should expose 'cert.pem' and 'key.pem'.
+  secret: vault-mutating-webhook
+  # Cluster CA data - can be retrieved with:
+  #   kubectl get configmap -n kube-system extension-apiserver-authentication \
+  #     -o=jsonpath='{.data.client-ca-file}' | base64 | tr -d '\n'
+  caBundle:
 
 resources: {}
   # We usually recommend not to specify default resources and to leave this as a conscious

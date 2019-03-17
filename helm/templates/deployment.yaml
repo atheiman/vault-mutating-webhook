@@ -19,22 +19,45 @@ spec:
         app.kubernetes.io/name: {{ include "vault-mutating-webhook.name" . }}
         app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
+      volumes:
+        - name: webhook-ssl
+          secret:
+            secretName: {{ .Values.ssl.secret }}
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+          - name: PASSENGER_PORT
+            value: "443"
+          - name: PASSENGER_SSL
+            value: "true"
+          - name: PASSENGER_SSL_CERTIFICATE
+            value: /webhook-ssl/cert.pem
+          - name: PASSENGER_SSL_CERTIFICATE_KEY
+            value: /webhook-ssl/key.pem
+          - name: WEBHOOK_FQDN
+            value: {{ .Values.webhook.fqdn }}
+          volumeMounts:
+            - name: webhook-ssl
+              mountPath: /webhook-ssl
+              readOnly: true
           ports:
-            - name: http
-              containerPort: 80
+            - name: https
+              containerPort: 443
               protocol: TCP
           livenessProbe:
             httpGet:
-              path: /
-              port: http
+              scheme: HTTPS
+              path: /health
+              port: https
+            initialDelaySeconds: 15
           readinessProbe:
             httpGet:
-              path: /
-              port: http
+              scheme: HTTPS
+              path: /health
+              port: https
+            initialDelaySeconds: 15
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}

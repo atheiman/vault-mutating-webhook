@@ -1,0 +1,26 @@
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: {{ include "vault-mutating-webhook.name" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "vault-mutating-webhook.name" . }}
+    helm.sh/chart: {{ include "vault-mutating-webhook.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+webhooks:
+  - name: {{ .Values.webhook.fqdn }}
+    clientConfig:
+      service:
+        name: {{ include "vault-mutating-webhook.fullname" . }}
+        namespace: {{ .Release.Namespace }}
+        path: "/vault-agent-sidecar"
+      caBundle: "{{ .Values.ssl.caBundle }}"
+    rules:
+      - operations: ["CREATE","UPDATE"]
+        apiGroups: [""]
+        apiVersions: ["v1"]
+        resources: ["pods"]
+    failurePolicy: {{ .Values.webhook.failurePolicy }}
+    namespaceSelector:
+      matchLabels:
+        {{ include "vault-mutating-webhook.name" . }}: enabled
