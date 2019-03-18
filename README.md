@@ -8,10 +8,10 @@ A helm chart is available to deploy this project to your cluster, see below.
 
 ## Pod Annotations to Customize Interaction with Webhook
 
-| Annotation | Description | Example |
-| ---------- | ----------- | ------- |
+| Annotation | Description | Examples |
+| ---------- | ----------- | -------- |
 | `vaultproject.io/vault_k8s_auth_role` | **Required** Vault Kubernetes auth method role name for the pod to authenticate as. If this is not set, the Pod will not be modified by the admission webhook. | `myapp` |
-| `vaultproject.io/vault_addr` | Optional. Address of Vault api (must be accessible from the pod). `VAULT_ADDR` env var should be set on the admission webhook deployment so that pods do not have to specify this. | `http://vault.vault.svc` |
+| `vaultproject.io/vault_addr` | Optional. Address of Vault api (must be accessible from the pod). `VAULT_ADDR` env var should be set on the admission webhook deployment so that pods do not have to specify this. | `https://vault.vault.svc`, `https://vault.example.com` |
 
 ## Deploy with Helm
 
