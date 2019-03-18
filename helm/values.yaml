@@ -16,6 +16,7 @@ webhook:
   # 'Ignore' or 'Fail'
   failurePolicy: Fail
   fqdn:
+  vault_addr:
 
 service:
   type: ClusterIP

@@ -10,11 +10,24 @@ A helm chart is available to deploy this project to your cluster, see below.
 
 | Annotation | Description | Example |
 | ---------- | ----------- | ------- |
-| `vaultproject.io/vault_addr` | Address of Vault Server (must be accessible from the pod) | `http://vault.vault.svc` |
+| `vaultproject.io/vault_k8s_auth_role` | **Required** Vault Kubernetes auth method role name for the pod to authenticate as. If this is not set, the Pod will not be modified by the admission webhook. | `myapp` |
+| `vaultproject.io/vault_addr` | Optional. Address of Vault api (must be accessible from the pod). `VAULT_ADDR` env var should be set on the admission webhook deployment so that pods do not have to specify this. | `http://vault.vault.svc` |
 
 ## Deploy with Helm
 
-Helm chart available in the [`helm/`](./helm/) directory.
+Helm chart available in the [`helm/`](./helm/) directory. See the `values.yaml` there for available configuration options. The basic deployment will look something like:
+
+```shell
+# Get the CA bundle data from the cluster
+ca_bundle="$(kubectl get configmap -n kube-system extension-apiserver-authentication \
+  -o=jsonpath='{.data.client-ca-file}' | base64 | tr -d '\n')"
+
+# Install the admission webhook chart
+helm upgrade vault-mutating-webhook ./helm/ --install \
+  --set webhook.fqdn=vault-mutating-webhook.example.com \
+  --set webhook.vault_addr=https://vault.example.com \
+  --set "ssl.caBundle=$ca_bundle"
+```
 
 ## Contributing
 
@@ -47,18 +60,15 @@ ca_bundle="$(kubectl get configmap -n kube-system extension-apiserver-authentica
   -o=jsonpath='{.data.client-ca-file}' | base64 | tr -d '\n')"
 
 helm init
-helm install ./helm/ --name vault-mutating-webhook \
-  --set webhook.fqdn=vault-mutating-webhook.example.com \
-  --set "ssl.caBundle=$ca_bundle"
 helm upgrade vault-mutating-webhook ./helm/ --install \
   --set webhook.fqdn=vault-mutating-webhook.example.com \
+  --set webhook.vault_addr=http://vault.default.svc \
   --set "ssl.caBundle=$ca_bundle"
 
 # Run Vault in the default namespace
 kubectl apply -n default -f test/vault.yaml
 
 kubectl apply -f test/test-pod.yaml
-kubectl get po -n webhook-test --show-labels
 
 rspec failure? dump response to an html file:
 File.open('./resp_body.html', 'w') { |file| file.write(last_response.body) }

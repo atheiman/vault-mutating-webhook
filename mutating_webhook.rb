@@ -8,14 +8,21 @@ get '/health' do
   'OK'
 end
 
-def exclude?(admission_review)
+def vault_addr(admission_review)
   annotations = admission_review['request']['object']['metadata']['annotations']
-  # Return false if no annotations
-  return false unless annotations.is_a? Hash
-  # Return true if the exclude annotation is set
-  return true if annotations.key?("#{WEBHOOK_FQDN}/exclude")
+  if annotations && annotations["#{WEBHOOK_FQDN}/vault_addr"]
+    return annotations["#{WEBHOOK_FQDN}/vault_addr"]
+  end
 
-  # Otherwise return false
+  ENV.fetch('VAULT_ADDR')
+end
+
+def vault_k8s_auth_role(admission_review)
+  annotations = admission_review['request']['object']['metadata']['annotations']
+  if annotations && annotations["#{WEBHOOK_FQDN}/vault_k8s_auth_role"]
+    return annotations["#{WEBHOOK_FQDN}/vault_k8s_auth_role"]
+  end
+
   false
 end
 
@@ -30,9 +37,9 @@ post '/vault-agent-sidecar', provides: 'application/json' do
     }
   }
 
-  # This annotation excludes pods from getting the patch
-  if exclude?(admission_review)
-    logger.info { "Excluding request uid '#{uid}' due to annotation" }
+  # if the vault_k8s_auth_role annotation is not set, do not set any patch
+  unless vault_k8s_auth_role(admission_review)
+    logger.info { "Excluding request uid '#{uid}' because annotation '#{WEBHOOK_FQDN}/vault_k8s_auth_role' not set" }
     return resp.to_json
   end
 
@@ -65,21 +72,20 @@ post '/vault-agent-sidecar', provides: 'application/json' do
   end
   sa_vol_mount = all_volume_mounts.select { |vm| vm['name'].match(/#{spec['serviceAccountName']}-token-\w+/) }.first
 
-  # TODO: pull role from annotation
   vault_agent_config = %(auto_auth {
-    method "kubernetes" {
-      mount_path = "auth/kubernetes"
-      config = {
-        role = "app"
-      }
+  method "kubernetes" {
+    mount_path = "auth/kubernetes"
+    config = {
+      role = "#{vault_k8s_auth_role(admission_review)}"
     }
+  }
 
-    sink "file" {
-      config = {
-        path = "/mnt/vault/token"
-      }
+  sink "file" {
+    config = {
+      path = "/mnt/vault/token"
     }
-  })
+  }
+})
 
   # add the vault agent container
   patches << { op: 'add', path: '/spec/containers/-', value: {
@@ -91,7 +97,7 @@ post '/vault-agent-sidecar', provides: 'application/json' do
     )],
 
     # TODO: pull vault_addr from annotation
-    env: [{ name: 'VAULT_ADDR', value: 'http://vault.default.svc' }],
+    env: [{ name: 'VAULT_ADDR', value: vault_addr(admission_review) }],
     volumeMounts: [{ name: volume['name'], mountPath: '/mnt/vault' }, sa_vol_mount]
   } }
 
