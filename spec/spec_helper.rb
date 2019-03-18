@@ -13,6 +13,8 @@ RSpec.configure do |conf|
   conf.include Rack::Test::Methods
 end
 
+ENV['VAULT_ADDR'] = 'https://vault.example.com'
+
 def test_uid
   'test-1234'
 end
@@ -38,7 +40,10 @@ def test_admission_review
       'object' => {
         'metadata' => {
           'name' => 'test-pod',
-          'namespace' => 'test'
+          'namespace' => 'test',
+          'annotations' => {
+            'vault-mutating-webhook.vaultproject.io/vault_k8s_auth_role' => 'myapp'
+          }
         },
         'spec' => {
           'volumes' => [
