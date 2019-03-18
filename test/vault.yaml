@@ -61,39 +61,11 @@ spec:
                   token_reviewer_jwt=@/run/secrets/kubernetes.io/serviceaccount/token
                 vault read auth/kubernetes/config
 
-                # "app" policy and auth role
-                echo '{"path": {"secret/data/app": {"capabilities": ["read"]},
-                                "database/creds/app": {"capabilities": ["read"]},
-                                "database/config/app": {"capabilities": ["read"]}}}' |
-                  vault policy write app -
                 vault write auth/kubernetes/role/app \
                   bound_service_account_names=default \
                   bound_service_account_namespaces=webhook-test \
-                  policies=app \
                   ttl=4h
                 vault read auth/kubernetes/role/app
-
-                # KV v2 secret
-                vault kv put secret/app random="$RANDOM"
-
-                # Database secret
-                vault secrets enable database
-                # Verify connection to mysql
-                until nc -vz mysql 3306; do
-                  sleep 3
-                done
-                vault write database/config/app \
-                  plugin_name="mysql-database-plugin" \
-                  connection_url="{{username}}:{{password}}@tcp(mysql:3306)/app" \
-                  allowed_roles="app" \
-                  username="root" \
-                  password="root-password"
-                # Very short TTL database creds (not suitable for Production)
-                vault write database/roles/app \
-                    db_name=app \
-                    creation_statements="CREATE USER '{{name}}'@'%' IDENTIFIED BY '{{password}}'; GRANT SELECT ON app.* TO '{{name}}'@'%';" \
-                    default_ttl="1m" \
-                    max_ttl="2m"
                 } 2>&1 | tee /var/postStart.log
 ---
 apiVersion: v1
@@ -106,35 +78,4 @@ spec:
       targetPort: vault
   selector:
     run: vault
-  type: NodePort
----
-apiVersion: v1
-kind: Pod
-metadata:
-  name: mysql
-  labels:
-    run: mysql
-spec:
-  containers:
-    - name: mysql
-      image: mysql
-      env:
-        - name: MYSQL_ROOT_PASSWORD
-          value: root-password
-        - name: MYSQL_DATABASE
-          value: app
-      ports:
-        - containerPort: 3306
-          name: mysql
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: mysql
-spec:
-  ports:
-    - port: 3306
-      targetPort: mysql
-  selector:
-    run: mysql
   type: NodePort

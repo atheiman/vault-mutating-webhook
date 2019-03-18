@@ -1,6 +1,6 @@
 # Vault Mutating Webhook Admission Controller
 
-This is a Kubernetes [Admission Webhook](https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/#admission-webhooks) that can modify pods to interact with Vault. The basic use case is to perform attach a sidecar container running [`vault agent`](https://www.vaultproject.io/docs/agent/) and syncing the Vault token to be available to the other containers in the pod via a `volumeMount`.
+This is a Kubernetes [Admission Webhook](https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/#admission-webhooks) that can modify pods to interact with Vault. The basic use case is to attach a sidecar container running [`vault agent`](https://www.vaultproject.io/docs/agent/) and syncing the Vault token to be available to the other containers in the pod via a `volumeMount`.
 
 Pods can customize their interaction with the webhook via annotations, see below.
 
@@ -59,7 +59,9 @@ title=vault-mutating-webhook ./gen-cert.sh
 ca_bundle="$(kubectl get configmap -n kube-system extension-apiserver-authentication \
   -o=jsonpath='{.data.client-ca-file}' | base64 | tr -d '\n')"
 
-helm init
+kubectl create sa tiller -n kube-system
+kubectl create clusterrolebinding tiller --clusterrole=cluster-admin --serviceaccount=kube-system:tiller
+helm init --service-account=tiller
 helm upgrade vault-mutating-webhook ./helm/ --install \
   --set webhook.fqdn=vault-mutating-webhook.example.com \
   --set webhook.vault_addr=http://vault.default.svc \
