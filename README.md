@@ -68,8 +68,11 @@ helm upgrade vault-mutating-webhook ./helm/ --install \
 # Run Vault in the default namespace
 kubectl apply -n default -f test/vault.yaml
 
+# Create the test pod
 kubectl apply -f test/test-pod.yaml
+# A token file should be available in the container
+kubectl exec -n webhook-test test -c app -- ls -alh /mnt/vault/token
 
-rspec failure? dump response to an html file:
+# rspec failure? dump response to an html file:
 File.open('./resp_body.html', 'w') { |file| file.write(last_response.body) }
 ```

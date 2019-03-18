@@ -15,7 +15,7 @@ metadata:
     vault-mutating-webhook.example.com/vault_k8s_auth_role: app
 spec:
   containers:
-    - name:  test
+    - name:  app
       image: alpine
       command: ['/bin/sh', '-c']
       args: ['sleep 1000']
