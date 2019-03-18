@@ -37,6 +37,16 @@ spec:
       ports:
         - containerPort: 8200
           name: vault
+      livenessProbe:
+        httpGet:
+          path: /health
+          port: vault
+        initialDelaySeconds: 15
+      readinessProbe:
+        httpGet:
+          path: /
+          port: vault
+        initialDelaySeconds: 15
       lifecycle:
         postStart:
           exec:
