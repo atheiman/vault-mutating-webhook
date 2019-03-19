@@ -11,7 +11,7 @@ A helm chart is available to deploy this project to your cluster, see below.
 | Annotation | Description | Examples |
 | ---------- | ----------- | -------- |
 | `vaultproject.io/vault_k8s_auth_role` | **Required**. Vault Kubernetes auth method role name for the pod to authenticate as. If this is not set, the Pod will not be modified by the admission webhook. | `myapp` |
-| `vaultproject.io/vault_addr` | Optional. Address of Vault api (must be accessible from the pod). `VAULT_ADDR` env var should be set on the admission webhook deployment so that pods do not have to specify this. | `https://vault.vault.svc`, `https://vault.example.com` |
+| `vaultproject.io/vault_agent_exit_after_auth` | Optional.
 
 ## Deploy with Helm
 
@@ -23,7 +23,7 @@ ca_bundle="$(kubectl get configmap -n kube-system extension-apiserver-authentica
   -o=jsonpath='{.data.client-ca-file}' | base64 | tr -d '\n')"
 
 # Install the admission webhook chart
-helm upgrade vault-mutating-webhook ./helm/ --install \
+helm upgrade vault-mutating-webhook ./helm/ --install --recreate-pods \
   --set webhook.fqdn=vault-mutating-webhook.example.com \
   --set webhook.vault_addr=https://vault.example.com \
   --set "ssl.caBundle=$ca_bundle"
@@ -50,31 +50,32 @@ docker build -t atheiman/vault-mutating-webhook .
 docker run --rm -p 3000:3000 atheiman/vault-mutating-webhook
 docker push atheiman/vault-mutating-webhook
 
+# initialize helm / tiller
+kubectl create sa tiller -n kube-system
+kubectl create clusterrolebinding tiller --clusterrole=cluster-admin --serviceaccount=kube-system:tiller
+helm init --service-account=tiller
+
 # Create and use namespace for mutating admission webhook
 kubectl create ns vault-mutating-webhook
 kubectl config set-context $(kubectl config current-context) --namespace=vault-mutating-webhook
 # Create cert and key secret
 title=vault-mutating-webhook ./gen-cert.sh
-# Deploy the helm chart with the cluster caBundle
+# Get the cluster caBundle for the helm chart
 ca_bundle="$(kubectl get configmap -n kube-system extension-apiserver-authentication \
   -o=jsonpath='{.data.client-ca-file}' | base64 | tr -d '\n')"
 
-kubectl create sa tiller -n kube-system
-kubectl create clusterrolebinding tiller --clusterrole=cluster-admin --serviceaccount=kube-system:tiller
-helm init --service-account=tiller
-helm upgrade vault-mutating-webhook ./helm/ --install \
-  --set webhook.fqdn=vault-mutating-webhook.example.com \
-  --set webhook.vault_addr=http://vault.default.svc \
+# Install / upgrade the helm chart for testing
+helm upgrade vault-mutating-webhook ./helm/ --install --recreate-pods \
+  --set create_test_resources=true \
   --set "ssl.caBundle=$ca_bundle"
 
-# Run Vault in the default namespace
-kubectl apply -n default -f test/vault.yaml
+# Test the helm chart installation
+helm test vault-mutating-webhook --parallel --cleanup
 
-# Create the test pod
-kubectl apply -f test/test-pod.yaml
-# A token file should be available in the container
-kubectl exec -n webhook-test test -c app -- ls -alh /mnt/vault/token
+# Cleanup the extra test resources
+kubectl delete ns vault-mutating-webhook-test
+kubectl delete clusterrolebinding vault-auth-delegator
 
-# rspec failure? dump response to an html file:
+# rspec failure? dump response to an html file in the spec test:
 File.open('./resp_body.html', 'w') { |file| file.write(last_response.body) }
 ```

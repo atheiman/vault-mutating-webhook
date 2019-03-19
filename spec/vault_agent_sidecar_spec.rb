@@ -24,19 +24,21 @@ describe Sinatra::Application do
          'path' => '/spec/containers/0/volumeMounts/-',
          'value' => { 'mountPath' => '/mnt/vault', 'name' => 'vault' } },
        { 'op' => 'add',
-         'path' => '/spec/containers/-',
+         'path' => '/spec/containers/0/env',
+         'value' => [{ 'name' => 'VAULT_ADDR', 'value' => 'https://vault.example.com' }] },
+       { 'op' => 'add', 'path' => '/spec/containers/-',
          'value' =>
-         { 'args' =>
-           ["\n      echo -e 'auto_auth {\n  method \"kubernetes\" {\n    mount_path = \"auth/kubernetes\"\n    config = {\n      role = \"myapp\"\n    }\n  }\n\n  sink \"file\" {\n    config = {\n      path = \"/mnt/vault/token\"\n    }\n  }\n}' > /vault-agent-config.hcl && vault agent -config=/vault-agent-config.hcl\n    "],
-           'command' => ['/bin/sh', '-c'],
-           'env' => [{ 'name' => 'VAULT_ADDR', 'value' => 'https://vault.example.com' }],
-           'image' => 'vault',
-           'name' => 'vault-agent',
-           'volumeMounts' =>
-           [{ 'mountPath' => '/mnt/vault', 'name' => 'vault' },
-            { 'mountPath' => '/var/run/secrets/kubernetes.io/serviceaccount',
-              'name' => 'default-token-vks5v',
-              'readOnly' => true }] } }]
+        { 'args' =>
+          ["\n      echo -e '\nexit_after_auth = \n\nauto_auth {\n  method \"kubernetes\" {\n    mount_path = \"auth/kubernetes\"\n    config = {\n      role = \"myapp\"\n    }\n  }\n\n  sink \"file\" {\n    config = {\n      path = \"/mnt/vault/token\"\n    }\n  }\n}\n' > /vault-agent-config.hcl && vault agent -config=/vault-agent-config.hcl\n    "],
+          'command' => ['/bin/sh', '-c'],
+          'env' => [{ 'name' => 'VAULT_ADDR', 'value' => 'https://vault.example.com' }],
+          'image' => 'vault',
+          'name' => 'vault-agent',
+          'volumeMounts' =>
+          [{ 'mountPath' => '/mnt/vault', 'name' => 'vault' },
+           { 'mountPath' => '/var/run/secrets/kubernetes.io/serviceaccount',
+             'name' => 'default-token-vks5v',
+             'readOnly' => true }] } }]
     )
   end
 end

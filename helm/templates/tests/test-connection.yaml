@@ -14,5 +14,6 @@ spec:
     - name: wget
       image: busybox
       command: ['wget']
-      args:  ['{{ include "vault-mutating-webhook.fullname" . }}:{{ .Values.service.port }}']
+      args:
+        - 'https://{{ include "vault-mutating-webhook.name" . }}:{{ .Values.service.port }}/health'
   restartPolicy: Never

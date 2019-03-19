@@ -36,8 +36,6 @@ spec:
             value: /webhook-ssl/cert.pem
           - name: PASSENGER_SSL_CERTIFICATE_KEY
             value: /webhook-ssl/key.pem
-          - name: WEBHOOK_FQDN
-            value: {{ .Values.webhook.fqdn }}
           - name: VAULT_ADDR
             value: {{ .Values.webhook.vault_addr }}
           volumeMounts:

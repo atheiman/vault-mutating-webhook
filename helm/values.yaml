@@ -15,8 +15,8 @@ fullnameOverride: ""
 webhook:
   # 'Ignore' or 'Fail'
   failurePolicy: Fail
-  fqdn:
-  vault_addr:
+  fqdn: vault-mutating-webhook.vaultproject.io
+  vault_addr: http://vault
 
 service:
   type: ClusterIP
@@ -30,6 +30,9 @@ ssl:
   #   kubectl get configmap -n kube-system extension-apiserver-authentication \
   #     -o=jsonpath='{.data.client-ca-file}' | base64 | tr -d '\n'
   caBundle:
+
+# Creates additional resources to enable `helm test` after chart installation
+create_test_resources: false
 
 resources: {}
   # We usually recommend not to specify default resources and to leave this as a conscious

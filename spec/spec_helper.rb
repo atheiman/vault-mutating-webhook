@@ -2,18 +2,20 @@ require 'base64'
 require 'json'
 require 'rspec'
 require 'rack/test'
-require_relative '../mutating_webhook'
 
-# Expose the app to rack-test
-def app
-  Sinatra::Application
-end
+ENV['WEBHOOK_FQDN'] = 'vault-mutating-webhook.vaultproject.io'
+ENV['VAULT_ADDR'] = 'https://vault.example.com'
+
+require_relative '../mutating_webhook'
 
 RSpec.configure do |conf|
   conf.include Rack::Test::Methods
 end
 
-ENV['VAULT_ADDR'] = 'https://vault.example.com'
+# Expose the app to rack-test
+def app
+  Sinatra::Application
+end
 
 def test_uid
   'test-1234'
@@ -42,7 +44,7 @@ def test_admission_review
           'name' => 'test-pod',
           'namespace' => 'test',
           'annotations' => {
-            'vault-mutating-webhook.vaultproject.io/vault_k8s_auth_role' => 'myapp'
+            'vaultproject.io/vault_k8s_auth_role' => 'myapp'
           }
         },
         'spec' => {

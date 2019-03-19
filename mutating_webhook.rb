@@ -2,28 +2,23 @@ require 'base64'
 require 'json'
 require 'sinatra'
 
-WEBHOOK_FQDN = ENV.fetch('WEBHOOK_FQDN', 'vault-mutating-webhook.vaultproject.io')
+ANNOTATION_DOMAIN = 'vaultproject.io'.freeze
+VAULT_ADDR_ENV = { name: 'VAULT_ADDR', value: ENV.fetch('VAULT_ADDR') }.freeze
 
 get '/health' do
   'OK'
 end
 
-def vault_addr(admission_review)
-  annotations = admission_review['request']['object']['metadata']['annotations']
-  if annotations && annotations["#{WEBHOOK_FQDN}/vault_addr"]
-    return annotations["#{WEBHOOK_FQDN}/vault_addr"]
-  end
-
-  ENV.fetch('VAULT_ADDR')
-end
-
-def vault_k8s_auth_role(admission_review)
-  annotations = admission_review['request']['object']['metadata']['annotations']
-  if annotations && annotations["#{WEBHOOK_FQDN}/vault_k8s_auth_role"]
-    return annotations["#{WEBHOOK_FQDN}/vault_k8s_auth_role"]
-  end
+def vault_k8s_auth_role(annotations)
+  ann = "#{ANNOTATION_DOMAIN}/vault_k8s_auth_role"
+  return annotations[ann] if annotations && annotations[ann]
 
   false
+end
+
+def vault_agent_exit_after_auth(annotations)
+  ann = "#{ANNOTATION_DOMAIN}/vault_agent_exit_after_auth"
+  annotations && annotations[ann] && annotations[ann] != 'false'
 end
 
 post '/vault-agent-sidecar', provides: 'application/json' do
@@ -37,9 +32,11 @@ post '/vault-agent-sidecar', provides: 'application/json' do
     }
   }
 
+  annotations = admission_review['request']['object']['metadata']['annotations']
+
   # if the vault_k8s_auth_role annotation is not set, do not set any patch
-  unless vault_k8s_auth_role(admission_review)
-    logger.info { "Excluding request uid '#{uid}' because annotation '#{WEBHOOK_FQDN}/vault_k8s_auth_role' not set" }
+  unless vault_k8s_auth_role(annotations)
+    logger.info { "Excluding request uid '#{uid}' because annotation '#{ANNOTATION_DOMAIN}/vault_k8s_auth_role' not set" }
     return resp.to_json
   end
 
@@ -58,10 +55,18 @@ post '/vault-agent-sidecar', provides: 'application/json' do
              else
                { op: 'add', path: '/spec/volumes', value: [volume] }
              end
-  # patch the vault token volumeMount onto each container
+  # patch the each container
   vault_volume_mount = { name: volume['name'], mountPath: '/mnt/vault' }
-  spec['containers'].each_with_index do |_cont, idx|
+  spec['containers'].each_with_index do |cont, idx|
+    # add the vault token volumeMount
     patches << { op: 'add', path: "/spec/containers/#{idx}/volumeMounts/-", value: vault_volume_mount }
+
+    # add the VAULT_ADDR env var
+    if cont['env'].is_a? Array
+      patches << { op: 'add', path: "/spec/containers/#{idx}/env/-", value: VAULT_ADDR_ENV }
+    else
+      patches << { op: 'add', path: "/spec/containers/#{idx}/env", value: [VAULT_ADDR_ENV] }
+    end
   end
 
   # find the service account token volume mount on another container to replicate
@@ -72,11 +77,14 @@ post '/vault-agent-sidecar', provides: 'application/json' do
   end
   sa_vol_mount = all_volume_mounts.select { |vm| vm['name'].match(/#{spec['serviceAccountName']}-token-\w+/) }.first
 
-  vault_agent_config = %(auto_auth {
+  vault_agent_config = %(
+exit_after_auth = #{vault_agent_exit_after_auth(annotations)}
+
+auto_auth {
   method "kubernetes" {
     mount_path = "auth/kubernetes"
     config = {
-      role = "#{vault_k8s_auth_role(admission_review)}"
+      role = "#{vault_k8s_auth_role(annotations)}"
     }
   }
 
@@ -85,7 +93,8 @@ post '/vault-agent-sidecar', provides: 'application/json' do
       path = "/mnt/vault/token"
     }
   }
-})
+}
+)
 
   # add the vault agent container
   patches << { op: 'add', path: '/spec/containers/-', value: {
@@ -96,8 +105,7 @@ post '/vault-agent-sidecar', provides: 'application/json' do
       echo -e '#{vault_agent_config}' > /vault-agent-config.hcl && vault agent -config=/vault-agent-config.hcl
     )],
 
-    # TODO: pull vault_addr from annotation
-    env: [{ name: 'VAULT_ADDR', value: vault_addr(admission_review) }],
+    env: [VAULT_ADDR_ENV],
     volumeMounts: [{ name: volume['name'], mountPath: '/mnt/vault' }, sa_vol_mount]
   } }
 

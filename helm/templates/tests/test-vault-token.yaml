@@ -1,0 +1,158 @@
+{{ if .Values.create_test_resources }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Release.Namespace }}-test
+  labels:
+    vault-mutating-webhook: enabled
+    app.kubernetes.io/name: {{ include "vault-mutating-webhook.name" . }}
+    helm.sh/chart: {{ include "vault-mutating-webhook.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vault
+  namespace: {{ .Release.Namespace }}-test
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: vault-auth-delegator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+- kind: ServiceAccount
+  name: vault
+  namespace: {{ .Release.Namespace }}-test
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vault
+  namespace: {{ .Release.Namespace }}-test
+  labels:
+    run: vault
+    app.kubernetes.io/name: {{ include "vault-mutating-webhook.name" . }}
+    helm.sh/chart: {{ include "vault-mutating-webhook.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      run: vault
+      app.kubernetes.io/name: {{ include "vault-mutating-webhook.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        run: vault
+        app.kubernetes.io/name: {{ include "vault-mutating-webhook.name" . }}
+        helm.sh/chart: {{ include "vault-mutating-webhook.chart" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/managed-by: {{ .Release.Service }}
+    spec:
+      serviceAccountName: vault
+      containers:
+        - name: vault
+          image: vault
+          args: [ "server", "-dev", "-dev-listen-address=0.0.0.0:8200", "-dev-root-token-id=$(VAULT_TOKEN)" ]
+          env:
+            - name: VAULT_ADDR
+              value: http://localhost:8200
+            - name: VAULT_TOKEN
+              value: root-token
+          ports:
+            - containerPort: 8200
+              name: vault
+          livenessProbe:
+            httpGet:
+              path: /
+              port: vault
+            initialDelaySeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /
+              port: vault
+            initialDelaySeconds: 15
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - |
+                    {
+                    set -ex
+
+                    # Verify connection to Vault
+                    until vault status; do
+                      sleep 3
+                    done
+                    vault token lookup
+
+                    # Kubernetes auth method
+                    vault auth enable kubernetes
+                    vault write auth/kubernetes/config \
+                      kubernetes_host=https://kubernetes.default.svc \
+                      kubernetes_ca_cert=@/run/secrets/kubernetes.io/serviceaccount/ca.crt \
+                      token_reviewer_jwt=@/run/secrets/kubernetes.io/serviceaccount/token
+                    vault read auth/kubernetes/config
+
+                    vault write auth/kubernetes/role/app \
+                      bound_service_account_names=default \
+                      bound_service_account_namespaces={{ .Release.Namespace }}-test \
+                      ttl=4h
+                    vault read auth/kubernetes/role/app
+                    } 2>&1 | tee /var/postStart.log
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vault
+  namespace: {{ .Release.Namespace }}-test
+  labels:
+    app.kubernetes.io/name: {{ include "vault-mutating-webhook.name" . }}
+    helm.sh/chart: {{ include "vault-mutating-webhook.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  ports:
+    - port: 80
+      targetPort: vault
+  selector:
+    run: vault
+  type: NodePort
+{{ end }}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ include "vault-mutating-webhook.fullname" . }}-test-token"
+  namespace: {{ .Release.Namespace }}-test
+  labels:
+    app.kubernetes.io/name: {{ include "vault-mutating-webhook.name" . }}
+    helm.sh/chart: {{ include "vault-mutating-webhook.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  annotations:
+    "helm.sh/hook": test-success
+    "vaultproject.io/vault_k8s_auth_role": app
+    "vaultproject.io/vault_agent_exit_after_auth": "true"
+spec:
+  restartPolicy: Never
+  containers:
+    - name:  app
+      image: vault
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -x
+          sleep 5
+          VAULT_TOKEN="$(cat /mnt/vault/token)" vault token lookup
