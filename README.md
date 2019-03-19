@@ -38,18 +38,25 @@ helm upgrade vault-mutating-webhook ./helm/ --install --recreate-pods \
 
 ## Tests
 
-Unit tests are written with rspec and rack-test ([See the Sinatra docs](http://sinatrarb.com/testing.html)). Execute them with `bundle exec rspec`.
+### Unit
 
-In the future, there should be integration tests with Kubernetes using something like [`kind`](https://github.com/kubernetes-sigs/kind) or [`microk8s`](https://github.com/ubuntu/microk8s).
+Unit tests are written with rspec and rack-test ([See the Sinatra docs](http://sinatrarb.com/testing.html)). They are meant to verify the Sinatra app responds with appropriate JSON when it receives requests like kube-apiserver would send it. Execute the tests with `bundle exec rspec`.
 
-## Notes
+If you run into an rspec failure that dumps out abbreviated Sinatra response HTML, you can save the HTML to a file and view in your browser. The rendered HTML will have info about the failure from Sinatra:
+
+```ruby
+it 'returns vault agent sidecar patches' do
+  json = test_admission_review.to_json
+  post('/vault-agent-sidecar', json, 'CONTENT_TYPE' => 'application/json')
+  File.open('./resp_body.html', 'w') { |file| file.write(last_response.body) }
+  # ...
+```
+
+### Integration
+
+Integration tests can be run with [`helm test`](https://github.com/helm/helm/blob/master/docs/chart_tests.md). They are meant to verify that a deployed Pod has a valid Vault token mounted into it's container(s). The test manifests are located in [`helm/templates/tests/`](./helm/templates/test/).
 
 ```shell
-# Docker build, run, and push
-docker build -t atheiman/vault-mutating-webhook .
-docker run --rm -p 3000:3000 atheiman/vault-mutating-webhook
-docker push atheiman/vault-mutating-webhook
-
 # initialize helm / tiller
 kubectl create sa tiller -n kube-system
 kubectl create clusterrolebinding tiller --clusterrole=cluster-admin --serviceaccount=kube-system:tiller
@@ -75,7 +82,17 @@ helm test vault-mutating-webhook --parallel --cleanup
 # Cleanup the extra test resources
 kubectl delete ns vault-mutating-webhook-test
 kubectl delete clusterrolebinding vault-auth-delegator
+```
 
-# rspec failure? dump response to an html file in the spec test:
-File.open('./resp_body.html', 'w') { |file| file.write(last_response.body) }
+In the future, these integration tests should be executed in a pipeline using something like [`kind`](https://github.com/kubernetes-sigs/kind) or [`microk8s`](https://github.com/ubuntu/microk8s).
+
+## Docker Image
+
+Installs [Phusion Passenger Standalone](https://www.phusionpassenger.com/library/config/standalone/reference/), RubyGems dependencies, and runs the Sinatra app in Passenger.
+
+```shell
+# Docker build, run, and push
+docker build -t atheiman/vault-mutating-webhook .
+docker run --rm -p 3000:3000 atheiman/vault-mutating-webhook
+docker push atheiman/vault-mutating-webhook
 ```
