@@ -15,8 +15,8 @@ describe Sinatra::Application do
       'allowed' => true,
       'patchType' => 'JSONPatch'
     )
-    patch = JSON.parse(Base64.decode64(resp['response']['patch']))
-    expect(patch).to eq(
+    patches = JSON.parse(Base64.decode64(resp['response']['patch']))
+    expect(patches).to eq(
       [{ 'op' => 'add',
          'path' => '/spec/volumes/-',
          'value' => { 'emptyDir' => { 'medium' => 'Memory' }, 'name' => 'vault' } },
@@ -29,9 +29,13 @@ describe Sinatra::Application do
        { 'op' => 'add', 'path' => '/spec/containers/-',
          'value' =>
         { 'args' =>
-          ["\n      echo -e '\nexit_after_auth = \n\nauto_auth {\n  method \"kubernetes\" {\n    mount_path = \"auth/kubernetes\"\n    config = {\n      role = \"myapp\"\n    }\n  }\n\n  sink \"file\" {\n    config = {\n      path = \"/mnt/vault/token\"\n    }\n  }\n}\n' > /vault-agent-config.hcl && vault agent -config=/vault-agent-config.hcl\n    "],
+          ['echo "$VAULT_AGENT_CONFIG_B64" | base64 -d > /vault-agent-config.hcl && vault agent -config=/vault-agent-config.hcl'],
           'command' => ['/bin/sh', '-c'],
-          'env' => [{ 'name' => 'VAULT_ADDR', 'value' => 'https://vault.example.com' }],
+          'env' =>
+            [{ 'name' => 'VAULT_ADDR', 'value' => 'https://vault.example.com' },
+             { 'name' => 'VAULT_AGENT_CONFIG_B64',
+               'value' =>
+               "ZXhpdF9hZnRlcl9hdXRoID0gZmFsc2UKCmF1dG9fYXV0aCB7CiAgbWV0aG9k\nICJrdWJlcm5ldGVzIiB7CiAgICBtb3VudF9wYXRoID0gImF1dGgva3ViZXJu\nZXRlcyIKICAgIGNvbmZpZyA9IHsKICAgICAgcm9sZSA9ICJteWFwcCIKICAg\nIH0KICB9CgogIHNpbmsgImZpbGUiIHsKICAgIGNvbmZpZyA9IHsKICAgICAg\ncGF0aCA9ICIvbW50L3ZhdWx0L3Rva2VuIgogICAgfQogIH0KfQ==\n" }],
           'image' => 'vault',
           'name' => 'vault-agent',
           'volumeMounts' =>
@@ -40,5 +44,22 @@ describe Sinatra::Application do
              'name' => 'default-token-vks5v',
              'readOnly' => true }] } }]
     )
+    vault_agent_config = patches.last['value']['env'].last['value']
+    expect(Base64.decode64(vault_agent_config)).to eq('exit_after_auth = false
+
+auto_auth {
+  method "kubernetes" {
+    mount_path = "auth/kubernetes"
+    config = {
+      role = "myapp"
+    }
+  }
+
+  sink "file" {
+    config = {
+      path = "/mnt/vault/token"
+    }
+  }
+}')
   end
 end

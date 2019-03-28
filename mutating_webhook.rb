@@ -18,7 +18,12 @@ end
 
 def vault_agent_exit_after_auth(annotations)
   ann = "#{ANNOTATION_DOMAIN}/vault_agent_exit_after_auth"
-  annotations && annotations[ann] && annotations[ann] != 'false'
+  if annotations && annotations[ann]
+    annotations[ann]
+  else
+    # default to false
+    false
+  end
 end
 
 post '/vault-agent-sidecar', provides: 'application/json' do
@@ -94,7 +99,7 @@ auto_auth {
     }
   }
 }
-)
+).strip
 
   # add the vault agent container
   patches << { op: 'add', path: '/spec/containers/-', value: {
@@ -102,10 +107,13 @@ auto_auth {
     image: 'vault',
     command: ['/bin/sh', '-c'],
     args: [%(
-      echo -e '#{vault_agent_config}' > /vault-agent-config.hcl && vault agent -config=/vault-agent-config.hcl
-    )],
+      echo "$VAULT_AGENT_CONFIG_B64" | base64 -d > /vault-agent-config.hcl && vault agent -config=/vault-agent-config.hcl
+    ).strip],
 
-    env: [VAULT_ADDR_ENV],
+    env: [
+      VAULT_ADDR_ENV,
+      { name: 'VAULT_AGENT_CONFIG_B64', value: Base64.encode64(vault_agent_config) }
+    ],
     volumeMounts: [{ name: volume['name'], mountPath: '/mnt/vault' }, sa_vol_mount]
   } }
 
