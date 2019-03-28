@@ -11,7 +11,7 @@ A helm chart is available to deploy this project to your cluster, see below.
 | Annotation | Description | Examples |
 | ---------- | ----------- | -------- |
 | `vaultproject.io/vault_k8s_auth_role` | **Required**. Vault Kubernetes auth method role name for the pod to authenticate as. If this is not set, the Pod will not be modified by the admission webhook. | `myapp` |
-| `vaultproject.io/vault_agent_exit_after_auth` | Optional.
+| `vaultproject.io/vault_agent_exit_after_auth` | Optional. Set this to `"true"` (String, not Boolean) to exit the `vault agent` container after a succesful token write. | `"true"` |
 
 ## Deploy with Helm
 
