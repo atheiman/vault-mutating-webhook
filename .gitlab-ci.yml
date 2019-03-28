@@ -1,6 +1,0 @@
-test:
-  stage: test
-  image: ruby:2
-  script:
-    - bundle
-    - bundle exec rspec

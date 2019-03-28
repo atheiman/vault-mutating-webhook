@@ -57,9 +57,6 @@ kubectl create clusterrolebinding tiller --clusterrole=cluster-admin --serviceac
 helm init --service-account=tiller
 
 # Create and use namespace for mutating admission webhook
-kubectl create ns vault-mutating-webhook
-kubectl config set-context $(kubectl config current-context) --namespace=vault-mutating-webhook
-
 kubectl config set-context $(kubectl config current-context) --namespace=kube-system
 
 # Install / upgrade the helm chart for testing
