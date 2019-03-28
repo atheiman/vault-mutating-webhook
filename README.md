@@ -56,8 +56,9 @@ kubectl create sa tiller -n kube-system
 kubectl create clusterrolebinding tiller --clusterrole=cluster-admin --serviceaccount=kube-system:tiller
 helm init --service-account=tiller
 
-# Use kube-system namespace for mutating admission webhook
-kubectl config set-context $(kubectl config current-context) --namespace=kube-system
+# Create and use namespace for mutating admission webhook
+kubectl create ns vault-mutating-webhook
+kubectl config set-context $(kubectl config current-context) --namespace=vault-mutating-webhook
 
 # Install / upgrade the helm chart for testing
 helm upgrade vault-mutating-webhook ./helm/ --install --recreate-pods \
