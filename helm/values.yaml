@@ -22,15 +22,6 @@ service:
   type: ClusterIP
   port: 443
 
-ssl:
-  # Can be created with `title=vault-mutating-webhook ./gen-cert.sh`. The secret
-  # should expose 'cert.pem' and 'key.pem'.
-  secret: vault-mutating-webhook
-  # Cluster CA data - can be retrieved with:
-  #   kubectl get configmap -n kube-system extension-apiserver-authentication \
-  #     -o=jsonpath='{.data.client-ca-file}' | base64 | tr -d '\n'
-  caBundle:
-
 # Creates additional resources to enable `helm test` after chart installation
 create_test_resources: false
 

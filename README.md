@@ -18,15 +18,9 @@ A helm chart is available to deploy this project to your cluster, see below.
 Helm chart available in the [`helm/`](./helm/) directory. See the `values.yaml` there for available configuration options. The basic deployment will look something like:
 
 ```shell
-# Get the CA bundle data from the cluster
-ca_bundle="$(kubectl get configmap -n kube-system extension-apiserver-authentication \
-  -o=jsonpath='{.data.client-ca-file}' | base64 | tr -d '\n')"
-
 # Install the admission webhook chart
 helm upgrade vault-mutating-webhook ./helm/ --install --recreate-pods \
-  --set webhook.fqdn=vault-mutating-webhook.example.com \
-  --set webhook.vault_addr=https://vault.example.com \
-  --set "ssl.caBundle=$ca_bundle"
+  --set webhook.vault_addr=https://vault.example.com
 ```
 
 ## Contributing
@@ -65,16 +59,12 @@ helm init --service-account=tiller
 # Create and use namespace for mutating admission webhook
 kubectl create ns vault-mutating-webhook
 kubectl config set-context $(kubectl config current-context) --namespace=vault-mutating-webhook
-# Create cert and key secret
-title=vault-mutating-webhook ./gen-cert.sh
-# Get the cluster caBundle for the helm chart
-ca_bundle="$(kubectl get configmap -n kube-system extension-apiserver-authentication \
-  -o=jsonpath='{.data.client-ca-file}' | base64 | tr -d '\n')"
+
+kubectl config set-context $(kubectl config current-context) --namespace=kube-system
 
 # Install / upgrade the helm chart for testing
 helm upgrade vault-mutating-webhook ./helm/ --install --recreate-pods \
-  --set create_test_resources=true \
-  --set "ssl.caBundle=$ca_bundle"
+  --set create_test_resources=true
 
 # Test the helm chart installation
 helm test vault-mutating-webhook --parallel --cleanup

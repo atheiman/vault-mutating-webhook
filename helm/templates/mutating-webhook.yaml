@@ -1,3 +1,11 @@
+{{- /*
+Admission webhook certificate authority, private key, and signed cert are generated
+by Helm. They are available throughout this file as variables defined here.
+*/ -}}
+{{- $altNames := list ( printf "%s.%s.svc" (include "vault-mutating-webhook.name" .) .Release.Namespace ) -}}
+{{- $ca := genCA "admission-webhook-ca" 3650 -}}
+{{- $cert := genSignedCert ( include "vault-mutating-webhook.name" . ) nil $altNames 3650 $ca -}}
+---
 apiVersion: admissionregistration.k8s.io/v1beta1
 kind: MutatingWebhookConfiguration
 metadata:
@@ -14,7 +22,7 @@ webhooks:
         name: {{ include "vault-mutating-webhook.fullname" . }}
         namespace: {{ .Release.Namespace }}
         path: "/vault-agent-sidecar"
-      caBundle: "{{ .Values.ssl.caBundle }}"
+      caBundle: {{ $ca.Cert | b64enc | quote }}
     rules:
       - operations: ["CREATE","UPDATE"]
         apiGroups: [""]
@@ -24,3 +32,12 @@ webhooks:
     namespaceSelector:
       matchLabels:
         {{ include "vault-mutating-webhook.name" . }}: enabled
+---
+apiVersion: v1
+kind: Secret
+type: Opaque
+metadata:
+  name: {{ include "vault-mutating-webhook.fullname" . }}
+data:
+  key.pem: {{ $cert.Key | b64enc | quote }}
+  cert.pem: {{ $cert.Cert | b64enc | quote }}

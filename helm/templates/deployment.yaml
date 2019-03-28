@@ -22,7 +22,7 @@ spec:
       volumes:
         - name: webhook-ssl
           secret:
-            secretName: {{ .Values.ssl.secret }}
+            secretName: {{ include "vault-mutating-webhook.fullname" . }}
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
